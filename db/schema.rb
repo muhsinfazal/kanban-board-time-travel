@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_21_085040) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_21_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -31,6 +31,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_21_085040) do
     t.jsonb "payload", default: {}, null: false
     t.index ["card_id"], name: "index_events_on_card_id"
     t.index ["event_type"], name: "index_events_on_event_type"
+    t.index ["occurred_at", "id"], name: "index_events_on_occurred_at_and_id"
     t.index ["occurred_at"], name: "index_events_on_occurred_at"
   end
 end
