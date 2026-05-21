@@ -10,9 +10,17 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_21_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_21_161040) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "board_snapshots", force: :cascade do |t|
+    t.bigint "last_event_id", null: false
+    t.datetime "snapshotted_at", null: false
+    t.jsonb "state", default: {}, null: false
+    t.index ["last_event_id"], name: "index_board_snapshots_on_last_event_id"
+    t.index ["snapshotted_at"], name: "index_board_snapshots_on_snapshotted_at"
+  end
 
   create_table "cards", force: :cascade do |t|
     t.string "column_name", default: "backlog", null: false

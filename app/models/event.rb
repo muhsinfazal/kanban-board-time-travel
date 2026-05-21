@@ -18,50 +18,36 @@ class Event < ApplicationRecord
       payload:,
       occurred_at: Time.current
     )
+    BoardSnapshot.maybe_snapshot!
+    self
   end
 
   def self.board_at(timestamp)
-    events = before_or_at(timestamp).chronological.to_a
+    snapshot = BoardSnapshot.nearest_before(timestamp)
+
+    if snapshot
+      # Start from snapshot state, replay only the delta
+      cards = snapshot.state.transform_keys(&:to_i)
+      # Symbolize nested keys
+      cards = cards.transform_values { |v| v.transform_keys(&:to_sym) }
+      delta_events = where("occurred_at > ? AND occurred_at <= ?", snapshot.snapshotted_at, timestamp)
+                       .chronological
+      apply_events(cards, delta_events)
+    else
+      # No snapshot yet — full replay (only happens before first 100 events)
+      cards = {}
+      apply_events(cards, before_or_at(timestamp).chronological)
+    end
+
+    build_board(cards)
+  end
+
+  # Full replay used when creating snapshots
+  def self.replay_all
     cards = {}
-
-    events.each do |event|
-      cid = event.card_id
-      p = event.payload
-
-      case event.event_type
-      when "card_created"
-        cards[cid] = {
-          id: cid,
-          title: p["title"],
-          description: p["description"],
-          column_name: p["column_name"],
-          position: p["position"].to_f
-        }
-      when "card_updated"
-        next unless cards[cid]
-        changes = p["changes"] || {}
-        cards[cid][:title] = changes["title"]&.last || p["title"] || cards[cid][:title]
-        cards[cid][:description] = changes["description"]&.last if changes["description"]
-        cards[cid][:description] = p["description"] if p["description"] && !changes["description"]
-      when "card_moved"
-        next unless cards[cid]
-        cards[cid][:column_name] = p["column_name"]
-        cards[cid][:position] = p["position"].to_f
-      when "card_reordered"
-        next unless cards[cid]
-        cards[cid][:position] = p["position"].to_f
-      when "card_deleted"
-        cards.delete(cid)
-      end
-    end
-
-    result = Card::COLUMNS.each_with_object({}) { |col, h| h[col] = [] }
-    cards.each_value do |card|
-      col = card[:column_name]
-      result[col] << card if result.key?(col)
-    end
-    result.each_value { |col_cards| col_cards.sort_by! { |c| c[:position] } }
-    result
+    apply_events(cards, chronological)
+    # Store as string-keyed JSON-safe hash
+    cards.transform_values { |v| v.transform_keys(&:to_s) }
   end
 
   def human_readable
@@ -116,5 +102,48 @@ class Event < ApplicationRecord
       "in_review" => "In Review",
       "done" => "Done"
     }[col] || col.to_s.humanize
+  end
+
+  def self.apply_events(cards, events)
+    events.each do |event|
+      cid = event.card_id
+      p   = event.payload
+
+      case event.event_type
+      when "card_created"
+        cards[cid] = {
+          id:          cid,
+          title:       p["title"],
+          description: p["description"],
+          column_name: p["column_name"],
+          position:    p["position"].to_f
+        }
+      when "card_updated"
+        next unless cards[cid]
+        changes = p["changes"] || {}
+        cards[cid][:title]       = changes["title"]&.last       if changes["title"]
+        cards[cid][:description] = changes["description"]&.last if changes["description"]
+      when "card_moved"
+        next unless cards[cid]
+        cards[cid][:column_name] = p["column_name"]
+        cards[cid][:position]    = p["position"].to_f
+      when "card_reordered"
+        next unless cards[cid]
+        cards[cid][:position] = p["position"].to_f
+      when "card_deleted"
+        cards.delete(cid)
+      end
+    end
+    cards
+  end
+
+  def self.build_board(cards)
+    result = Card::COLUMNS.each_with_object({}) { |col, h| h[col] = [] }
+    cards.each_value do |card|
+      col = card[:column_name]
+      result[col] << card if result.key?(col)
+    end
+    result.each_value { |col_cards| col_cards.sort_by! { |c| c[:position] } }
+    result
   end
 end

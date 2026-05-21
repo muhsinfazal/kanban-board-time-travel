@@ -57,7 +57,7 @@ export default function BoardPage({
   };
 
   const loadMoreEvents = async () => {
-    if (isHistorical || isLoadingMoreEvents || !hasMoreEvents) return;
+    if (isLoadingMoreEvents || !hasMoreEvents) return;
     const oldestEvent = events[events.length - 1];
     if (!oldestEvent) return;
 
