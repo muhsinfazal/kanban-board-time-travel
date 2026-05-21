@@ -8,13 +8,26 @@ const EVENT_ICONS = {
   card_deleted: { icon: "✕", color: "text-red-400" }
 };
 
-export default function ActivityLog({ events }) {
+export default function ActivityLog({
+  events,
+  onLoadMore,
+  hasMore,
+  loadingMore
+}) {
   const formatRelative = (iso) => {
     const diff = Date.now() - new Date(iso).getTime();
     if (diff < 60000) return "just now";
     if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
     if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
     return new Date(iso).toLocaleDateString();
+  };
+
+  const handleScroll = (event) => {
+    if (!onLoadMore || loadingMore || !hasMore) return;
+    const { scrollTop, scrollHeight, clientHeight } = event.currentTarget;
+    if (scrollHeight - scrollTop - clientHeight < 120) {
+      onLoadMore();
+    }
   };
 
   return (
@@ -24,7 +37,10 @@ export default function ActivityLog({ events }) {
           Activity
         </h2>
       </div>
-      <div className="flex-1 overflow-y-auto scrollbar-hide">
+      <div
+        className="flex-1 overflow-y-auto scrollbar-hide"
+        onScroll={handleScroll}
+      >
         {events.length === 0 ? (
           <div className="p-4 text-xs text-zinc-600 text-center mt-4">
             No activity yet
@@ -59,6 +75,21 @@ export default function ActivityLog({ events }) {
                 </div>
               );
             })}
+            {hasMore && (
+              <div className="px-4 py-3 text-xs text-zinc-500 text-center">
+                {loadingMore ? (
+                  "Loading older activity…"
+                ) : (
+                  <button
+                    type="button"
+                    onClick={onLoadMore}
+                    className="font-medium text-sky-400 hover:text-sky-300 transition-colors"
+                  >
+                    Load older activity
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

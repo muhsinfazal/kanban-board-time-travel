@@ -6,7 +6,10 @@ class Event < ApplicationRecord
 
   scope :chronological, -> { order(:occurred_at, :id) }
   scope :before_or_at, ->(time) { where('occurred_at <= ?', time) }
-  scope :recent, -> { order(occurred_at: :desc, id: :desc).limit(50) }
+  scope :before_anchor, ->(time, id) {
+    where('occurred_at < ? OR (occurred_at = ? AND id < ?)', time, time, id)
+  }
+  scope :recent, ->(limit = 25) { order(occurred_at: :desc, id: :desc).limit(limit) }
 
   def self.record!(event_type:, card_id:, payload: {})
     create!(

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState } from "react";
 import axios from "axios";
 import {
   DndContext,
@@ -30,6 +30,8 @@ export default function BoardPage({
 }) {
   const [board, setBoard] = useState(initialBoard);
   const [events, setEvents] = useState(initialEvents);
+  const [hasMoreEvents, setHasMoreEvents] = useState(initialEvents.length === 25);
+  const [isLoadingMoreEvents, setIsLoadingMoreEvents] = useState(false);
   const [isHistorical, setIsHistorical] = useState(false);
   const [historicalTime, setHistoricalTime] = useState(null);
   const [modal, setModal] = useState(null);
@@ -48,8 +50,34 @@ export default function BoardPage({
     try {
       const { data } = await axios.get("/activity");
       if (data?.events) setEvents(data.events);
+      if (typeof data?.has_more === "boolean") setHasMoreEvents(data.has_more);
     } catch (err) {
       console.error("Failed to refresh activity log", err);
+    }
+  };
+
+  const loadMoreEvents = async () => {
+    if (isHistorical || isLoadingMoreEvents || !hasMoreEvents) return;
+    const oldestEvent = events[events.length - 1];
+    if (!oldestEvent) return;
+
+    setIsLoadingMoreEvents(true);
+    try {
+      const { data } = await axios.get("/activity", {
+        params: {
+          before_occurred_at: oldestEvent.occurred_at,
+          before_id: oldestEvent.id
+        }
+      });
+
+      if (data?.events?.length) {
+        setEvents((prev) => [...prev, ...data.events]);
+      }
+      setHasMoreEvents(data?.has_more ?? false);
+    } catch (err) {
+      console.error("Failed to load more activity", err);
+    } finally {
+      setIsLoadingMoreEvents(false);
     }
   };
 
@@ -175,6 +203,8 @@ export default function BoardPage({
   const handleReturn = () => {
     setBoard(initialBoard);
     setEvents(initialEvents);
+    setHasMoreEvents(initialEvents.length === 25);
+    setIsLoadingMoreEvents(false);
     setIsHistorical(false);
     setHistoricalTime(null);
     window.location.reload();
@@ -234,7 +264,12 @@ export default function BoardPage({
           </div>
         </div>
 
-        <ActivityLog events={events} />
+        <ActivityLog
+          events={events}
+          onLoadMore={loadMoreEvents}
+          hasMore={hasMoreEvents}
+          loadingMore={isLoadingMoreEvents}
+        />
       </div>
 
       <TimelineBar
