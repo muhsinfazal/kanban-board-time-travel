@@ -5,5 +5,9 @@ Rails.application.routes.draw do
     end
   end
 
+  resource :timeline, only: :show do
+    get :events, on: :collection
+  end
+
   root 'board#show'
 end

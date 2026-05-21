@@ -4,6 +4,8 @@ class Event < ApplicationRecord
   validates :event_type, inclusion: { in: EVENT_TYPES }
   validates :card_id, presence: true
 
+  scope :chronological, -> { order(:occurred_at, :id) }
+  scope :before_or_at, ->(time) { where('occurred_at <= ?', time) }
   scope :recent, -> { order(occurred_at: :desc, id: :desc).limit(50) }
 
   def self.record!(event_type:, card_id:, payload: {})
@@ -13,6 +15,50 @@ class Event < ApplicationRecord
       payload:,
       occurred_at: Time.current
     )
+  end
+
+  def self.board_at(timestamp)
+    events = before_or_at(timestamp).chronological.to_a
+    cards = {}
+
+    events.each do |event|
+      cid = event.card_id
+      p = event.payload
+
+      case event.event_type
+      when "card_created"
+        cards[cid] = {
+          id: cid,
+          title: p["title"],
+          description: p["description"],
+          column_name: p["column_name"],
+          position: p["position"].to_f
+        }
+      when "card_updated"
+        next unless cards[cid]
+        changes = p["changes"] || {}
+        cards[cid][:title] = changes["title"]&.last || p["title"] || cards[cid][:title]
+        cards[cid][:description] = changes["description"]&.last if changes["description"]
+        cards[cid][:description] = p["description"] if p["description"] && !changes["description"]
+      when "card_moved"
+        next unless cards[cid]
+        cards[cid][:column_name] = p["column_name"]
+        cards[cid][:position] = p["position"].to_f
+      when "card_reordered"
+        next unless cards[cid]
+        cards[cid][:position] = p["position"].to_f
+      when "card_deleted"
+        cards.delete(cid)
+      end
+    end
+
+    result = Card::COLUMNS.each_with_object({}) { |col, h| h[col] = [] }
+    cards.each_value do |card|
+      col = card[:column_name]
+      result[col] << card if result.key?(col)
+    end
+    result.each_value { |col_cards| col_cards.sort_by! { |c| c[:position] } }
+    result
   end
 
   def human_readable
@@ -46,6 +92,15 @@ class Event < ApplicationRecord
     else
       "Unknown event"
     end
+  end
+
+  def as_event_json
+    {
+      id: id,
+      description: human_readable,
+      occurred_at: occurred_at,
+      event_type: event_type
+    }
   end
 
   private
