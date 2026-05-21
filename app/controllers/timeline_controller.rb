@@ -3,7 +3,6 @@ class TimelineController < ApplicationController
     timestamp = Time.zone.parse(params[:at])
     board = Event.board_at(timestamp)
     events = Event.before_or_at(timestamp).recent.map(&:as_event_json)
-    end
 
     render json: { board:, events:, timestamp: }
   rescue ArgumentError, TypeError
