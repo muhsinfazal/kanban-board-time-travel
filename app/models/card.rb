@@ -11,6 +11,12 @@ class Card < ApplicationRecord
 
   scope :ordered, -> { order(:position) }
 
+  def self.board_state
+    COLUMNS.each_with_object({}) do |col, hash|
+      hash[col] = where(column_name: col).ordered.map(&:as_card_json)
+    end
+  end
+
   def as_card_json
     {
       id:,
